@@ -60,6 +60,17 @@ class PicoLcd:
 		 i*4,
 		 0x02,0x00,0x64,0x3F,0x00,0x64,0xC0
 		]))
+	
+	def put_block(self, col, row, payload):
+		if col%2:
+			raise NotImplementedError
+		if len(payload)<=32:
+			return self._cmd3(col*4,row,payload)
+		else:
+			assert len(payload)<=64
+			return self._cmd3(col*4,row,payload[:32]) \
+			     + self._cmd4(col*4,payload[32:])
+	
 	def _cmd3(self, chipsel, line, payload=[0x00]*32):
 		return self.write(bytes([
 		 OUT_REPORT_CMD_DATA,
@@ -73,7 +84,7 @@ class PicoLcd:
 	def _cmd4(self, chipsel, payload=[0x00]*32):
 		return self.write(bytes([
 			OUT_REPORT_DATA,
-			chipsel|0x01,
+			chipsel|0x01,#NOTE: no idea what chipsel actually sets
 			0x00,0x00,
 			len(payload),
 			*payload
