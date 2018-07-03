@@ -23,14 +23,17 @@ class PicoLcd:
 		# drv_pLG_open
 		self._dev=usb.core.find(idVendor=idVendor, idProduct=idProduct)
 		
+		self.errors=[]
 		try:
 			self._dev.detach_kernel_driver(0)
-			self._dev.set_configuration()
-			time.sleep(0.0001)
-			usb.util.claim_interface(self._dev,0)
-			self._dev.set_interface_altsetting(0)
-		except usb.core.USBError:
-			pass #TODO throw back actual errors
+		except usb.core.USBError as e:
+			self.errors.append(e)
+			if e.errno != 2:
+				raise
+		self._dev.set_configuration()
+		time.sleep(0.0001)
+		usb.util.claim_interface(self._dev,0)
+		self._dev.set_interface_altsetting(0)
 	
 	def __del__(self):
 		# drv_pLG_close
@@ -38,29 +41,27 @@ class PicoLcd:
 #		self._dev.reset()
 	
 	def write(self, data): #drv_pLG_send
-		print(repr(data))
+		time.sleep(1)
+		print(repr(data[:8]), '+', len(data)-8)
 		return self._dev.write(usb.util.ENDPOINT_OUT+1, data)
 	
 	def read(self, n): #drv_pLG_read
 		return self._dev.read(usb.util.ENDPOINT_IN+1, n)
 	
-	def clear(self): #drv_pLG_clear
-		self.write(b'\x93\x01\x00')
-		cmd2=bytearray(9)
+	def clear(self):
+		return self.write(b'\x93\x01\x00')
+	def restore_block(self, i):
+		return self.write(bytes([
+		 OUT_REPORT_CMD,
+		 i*4,
+		 0x02,0x00,0x64,0x3F,0x00,0x64,0xC0
+		]))
+	def drv_pLG_clear(self):
+		self.clear()
+		for i in range(4):
+			self.restore_block(i)
 		cmd3=bytearray(64)
 		cmd4=bytearray(64)
-		for i in range(4):
-			cs=((i << 2) & 0xFF)
-			cmd2[0]=OUT_REPORT_CMD
-			cmd2[1]=cs
-			cmd2[2]=0x02
-			cmd2[3]=0x00
-			cmd2[4]=0x64
-			cmd2[5]=0x3F
-			cmd2[6]=0x00
-			cmd2[7]=0x64
-			cmd2[8]=0xC0
-			self.write(cmd2)
 		for cs in range(4):
 			chipsel = (cs << 2);
 			for line in range(8):
@@ -76,7 +77,7 @@ class PicoLcd:
 				cmd3[9]=0x00
 				cmd3[10]=0x00
 				cmd3[11]=32
-				temp=0
+				temp=0x00
 				for index in range(32):
 					cmd3[12+index]=temp
 				self.write(cmd3)
@@ -91,10 +92,16 @@ class PicoLcd:
 				self.write(cmd4)
 
 	
-	def set_backlight(self, brightness):
+	def set_backlight(self, brightness): #drv_pLG_backlight
 		return self.write(bytes([
 		 OUT_REPORT_LCD_BACKLIGHT,
 		 brightness
+		]))
+	
+	def set_contrast(self, contrast): #drv_pLG_contrast
+		return self.write(bytes([
+		 OUT_REPORT_LCD_CONTRAST,
+		 contrast
 		]))
 	
 	def text(self, text, row=0,col=0): #drv_pL_write from drv_PicoLCD.c
