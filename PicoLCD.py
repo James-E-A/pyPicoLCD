@@ -1,6 +1,7 @@
 import usb.core,usb.util
 import time
 import sys
+from font68 import f68enc
 
 picoLCD_VENDOR=0x04d8
 picoLCD_DEVICE=0xc002
@@ -118,5 +119,5 @@ if __name__ == "__main__":
 	p.drv_pLG_clear()
 	for i in [0,*range(15,256)]:
 		p.set_backlight(i)
-#		p.text("HELLO 123 TESTING TESTING 123".encode('ascii'), i, 5)
+		p.put_block(0,0,f68enc("TEST 123 W0Wo"))
 		time.sleep(0.2)
