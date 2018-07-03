@@ -1,33 +1,50 @@
 import usb.core,usb.util
 import time
 
+picoLCD_VENDOR=0x04d8
+picoLCD_DEVICE=0xc002
+
+OUT_REPORT_LED_STATE		= 0x81
 OUT_REPORT_LCD_BACKLIGHT        = 0x91
 OUT_REPORT_LCD_CONTRAST         = 0x92
-OUT_REPORT_LCD_CONTROL          = 0x93
-OUT_REPORT_LCD_CLEAR            = 0x94
-OUT_REPORT_LCD_TEXT             = 0x98
-OUT_REPORT_LCD_FONT             = 0x9C
 
 OUT_REPORT_CMD			= 0x94
 OUT_REPORT_DATA			= 0x95
 OUT_REPORT_CMD_DATA		= 0x96
 
+OUT_REPORT_GPO			= 0x81
+OUT_REPORT_WRITE		= 0x98
+
+SCREEN_H			= 64
+SCREEN_W			= 256
+
 class PicoLcd:
-	def __init__(self, idVendor=0x04d8, idProduct=0xc002):
+	def __init__(self, idProduct=picoLCD_DEVICE, idVendor=picoLCD_VENDOR):
+		# drv_pLG_open
 		self._dev=usb.core.find(idVendor=idVendor, idProduct=idProduct)
+		
 		try:
 			self._dev.detach_kernel_driver(0)
 			self._dev.set_configuration()
+			time.sleep(0.0001)
 			usb.util.claim_interface(self._dev,0)
 			self._dev.set_interface_altsetting(0)
 		except usb.core.USBError:
 			pass #TODO throw back actual errors
 	
-	def write(self, data):
+	def __del__(self):
+		# drv_pLG_close
+		usb.util.release_interface(self._dev,0)
+#		self._dev.reset()
+	
+	def write(self, data): #drv_pLG_send
 		print(repr(data))
 		return self._dev.write(usb.util.ENDPOINT_OUT+1, data)
 	
-	def clear(self): #drv_pLG_clear from drv_picoLCDGraphic.c
+	def read(self, n): #drv_pLG_read
+		return self._dev.read(usb.util.ENDPOINT_IN+1, n)
+	
+	def clear(self): #drv_pLG_clear
 		self.write(b'\x93\x01\x00')
 		cmd2=bytearray(9)
 		cmd3=bytearray(64)
@@ -84,7 +101,7 @@ class PicoLcd:
 		# https://lcd4linux.bulix.org/browser/trunk/drv_picoLCD.c#L250
 		# I have no idea why this isn't working...
 		return self.write(bytes([
-		 OUT_REPORT_LCD_TEXT,
+		 OUT_REPORT_WRITE,
 		 row,
 		 col,
 		 len(text),
