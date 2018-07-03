@@ -1,5 +1,6 @@
 import usb.core,usb.util
 import time
+import sys
 
 picoLCD_VENDOR=0x04d8
 picoLCD_DEVICE=0xc002
@@ -19,7 +20,7 @@ SCREEN_H			= 64
 SCREEN_W			= 256
 
 class PicoLcd:
-	def __init__(self, idProduct=picoLCD_DEVICE, idVendor=picoLCD_VENDOR):
+	def __init__(self, idProduct=picoLCD_DEVICE, idVendor=picoLCD_VENDOR, DEBUG=False):
 		# drv_pLG_open
 		self._dev=usb.core.find(idVendor=idVendor, idProduct=idProduct)
 		
@@ -34,6 +35,7 @@ class PicoLcd:
 		time.sleep(0.0001)
 		usb.util.claim_interface(self._dev,0)
 		self._dev.set_interface_altsetting(0)
+		self._DEBUG=DEBUG
 	
 	def __del__(self):
 		# drv_pLG_close
@@ -41,8 +43,8 @@ class PicoLcd:
 #		self._dev.reset()
 	
 	def write(self, data): #drv_pLG_send
-		time.sleep(1)
-		print(repr(data[:8]), '+', len(data)-8)
+		if self._DEBUG:
+			sys.stderr.buffer.write(data)
 		return self._dev.write(usb.util.ENDPOINT_OUT+1, data)
 	
 	def read(self, n): #drv_pLG_read
@@ -50,6 +52,7 @@ class PicoLcd:
 	
 	def clear(self):
 		return self.write(b'\x93\x01\x00')
+	
 	def init_img_quadrant(self, i):
 		# This function name is a GUESS
 		return self.write(bytes([
@@ -57,23 +60,23 @@ class PicoLcd:
 		 i*4,
 		 0x02,0x00,0x64,0x3F,0x00,0x64,0xC0
 		]))
-	def _cmd3(self, chipsel, line):
+	def _cmd3(self, chipsel, line, payload=[0x00]*32):
 		return self.write(bytes([
 		 OUT_REPORT_CMD_DATA,
 		 chipsel,
 		 0x02,0x00,0x00,
 		 0xb8|line,
 		 0x00,0x00,0x40,0x00,0x00,
-		 32,
-		 *([0x00]*32)
+		 len(payload),
+		 *payload
 		]))
-	def _cmd4(self, chipsel):
+	def _cmd4(self, chipsel, payload=[0x00]*32):
 		return self.write(bytes([
 			OUT_REPORT_DATA,
 			chipsel|0x01,
 			0x00,0x00,
-			32,
-			*([0x00]*32)
+			len(payload),
+			*payload
 		]))
 	def drv_pLG_clear(self):
 		self.clear()
@@ -85,6 +88,8 @@ class PicoLcd:
 				self._cmd4(chipsel=cs*4)
 	
 	def set_backlight(self, brightness): #drv_pLG_backlight
+		if brightness<15 and brightness!=0:
+			pass #Backlight is off, maybe TODO warn or something
 		return self.write(bytes([
 		 OUT_REPORT_LCD_BACKLIGHT,
 		 brightness
@@ -95,23 +100,12 @@ class PicoLcd:
 		 OUT_REPORT_LCD_CONTRAST,
 		 contrast
 		]))
-	
-	def text(self, text, row=0,col=0): #drv_pL_write from drv_PicoLCD.c
-		# https://lcd4linux.bulix.org/browser/trunk/drv_picoLCD.c#L250
-		# I have no idea why this isn't working...
-		return self.write(bytes([
-		 OUT_REPORT_WRITE,
-		 row,
-		 col,
-		 len(text),
-		 *text
-		]))
 
 if __name__ == "__main__":
 	from datetime import datetime
-	p = PicoLcd()
-	p.clear()
-	for i in range(8):
-		p.set_backlight(1<<i)
-		p.text("HELLO 123 TESTING TESTING 123".encode('ascii'), i, 5)
+	p = PicoLcd(DEBUG=True)
+	p.drv_pLG_clear()
+	for i in [0,*range(15,256)]:
+		p.set_backlight(i)
+#		p.text("HELLO 123 TESTING TESTING 123".encode('ascii'), i, 5)
 		time.sleep(0.2)
