@@ -50,39 +50,32 @@ class PicoLcd:
 	
 	def clear(self):
 		return self.write(b'\x93\x01\x00')
-	def restore_block(self, i):
+	def init_img_quadrant(self, i):
 		return self.write(bytes([
 		 OUT_REPORT_CMD,
 		 i*4,
 		 0x02,0x00,0x64,0x3F,0x00,0x64,0xC0
 		]))
+	def cmd3(self, chipsel, line):
+		return self.write(bytes([
+		 OUT_REPORT_CMD_DATA,
+		 chipsel,
+		 0x02,0x00,0x00,
+		 0xb8|line,
+		 0x00,0x00,0x40,0x00,0x00,
+		 32,
+		 *([0x00]*32)
+		]))
 	def drv_pLG_clear(self):
 		self.clear()
 		for i in range(4):
-			self.restore_block(i)
-		cmd3=bytearray(64)
+			self.init_img_quadrant(i)
 		cmd4=bytearray(64)
-		for cs in range(4):
-			chipsel = (cs << 2);
+		for cs in range(0,4):
 			for line in range(8):
-				cmd3[0]=OUT_REPORT_CMD_DATA
-				cmd3[1]=chipsel
-				cmd3[2]=0x02
-				cmd3[3]=0x00
-				cmd3[4]=0x00
-				cmd3[5]=0xb8|line
-				cmd3[6]=0x00
-				cmd3[7]=0x00
-				cmd3[8]=0x40
-				cmd3[9]=0x00
-				cmd3[10]=0x00
-				cmd3[11]=32
-				temp=0x00
-				for index in range(32):
-					cmd3[12+index]=temp
-				self.write(cmd3)
+				self.cmd3(chipsel=cs*4, line=line)
 				cmd4[0]=OUT_REPORT_DATA
-				cmd4[1]=chipsel|0x01
+				cmd4[1]=(cs*4)|0x01
 				cmd4[2]=0x00
 				cmd4[3]=0x00
 				cmd4[4]=32
