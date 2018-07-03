@@ -51,12 +51,13 @@ class PicoLcd:
 	def clear(self):
 		return self.write(b'\x93\x01\x00')
 	def init_img_quadrant(self, i):
+		# This function name is a GUESS
 		return self.write(bytes([
 		 OUT_REPORT_CMD,
 		 i*4,
 		 0x02,0x00,0x64,0x3F,0x00,0x64,0xC0
 		]))
-	def cmd3(self, chipsel, line):
+	def _cmd3(self, chipsel, line):
 		return self.write(bytes([
 		 OUT_REPORT_CMD_DATA,
 		 chipsel,
@@ -66,24 +67,22 @@ class PicoLcd:
 		 32,
 		 *([0x00]*32)
 		]))
+	def _cmd4(self, chipsel):
+		return self.write(bytes([
+			OUT_REPORT_DATA,
+			chipsel|0x01,
+			0x00,0x00,
+			32,
+			*([0x00]*32)
+		]))
 	def drv_pLG_clear(self):
 		self.clear()
 		for i in range(4):
 			self.init_img_quadrant(i)
-		cmd4=bytearray(64)
 		for cs in range(0,4):
 			for line in range(8):
-				self.cmd3(chipsel=cs*4, line=line)
-				cmd4[0]=OUT_REPORT_DATA
-				cmd4[1]=(cs*4)|0x01
-				cmd4[2]=0x00
-				cmd4[3]=0x00
-				cmd4[4]=32
-				for index in range(32,64):
-					temp=0x00
-					cmd4[5+(index-32)] = temp
-				self.write(cmd4)
-
+				self._cmd3(chipsel=cs*4, line=line)
+				self._cmd4(chipsel=cs*4)
 	
 	def set_backlight(self, brightness): #drv_pLG_backlight
 		return self.write(bytes([
