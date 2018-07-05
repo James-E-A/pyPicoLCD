@@ -2,6 +2,7 @@ import usb.core,usb.util
 import time
 import sys
 from font68 import f68enc
+from random import randint
 
 picoLCD_VENDOR=0x04d8
 picoLCD_DEVICE=0xc002
@@ -161,7 +162,7 @@ class PicoLcd:
 		"""
 		self.clear()
 		for i in range(4):
-			self.init_img_quadrant(i)
+			self._out_report_cmd(i)
 		payload=bytes(32)#b'\x00'*32
 		for cs in range(0,4):
 			for line in range(8):
@@ -170,20 +171,31 @@ class PicoLcd:
 	
 	def put_block(self, col, row, payload):
 		"""ALPHA-QUALITY function to draw pixels to the screen"""
-		if col%2:
+		if col&0b1:
 			raise NotImplementedError
 		if len(payload)<=32:
-			return self._cmd3(col*4,row,payload)
+			return self._out_report_cmd_data(col*4, row, payload)
 		else:
 			assert len(payload)<=64
-			return self._cmd3(col*4,row,payload[:32]) \
-			     + self._cmd4(col*4,payload[32:])
+			return self._out_report_cmd_data(col*2, row, payload[:32]) \
+			     + self._out_report_data(col*2, payload[32:])
 
 if __name__ == "__main__":
 	from datetime import datetime
 	p = PicoLcd(DEBUG=True)
-	p.drv_pLG_clear()
-	for i in [0,*range(15,256)]:
+	p._drv_pLG_clear()
+	for i in [0,0,
+	  *range(15,24,1),
+	  *range(24,30,2),
+	  *range(30,38,4),
+	  *range(38,64,8),
+	  *range(64,128,16),
+	  *range(128,256,32),
+	]:
 		p.set_backlight(i)
-		time.sleep(0.2)
-	p.put_block(0,0,f68enc("TEST 123 W0Wo"))
+		p._out_report_cmd_data(
+		  chipsel=int(2.5*4), line=8//2,
+		  payload=f68enc(repr(i))
+		)
+		time.sleep(0.1)
+	p.put_block(0,0,f68enc("TEST 123"))
