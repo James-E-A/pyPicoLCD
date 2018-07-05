@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
 	name="PicoLCD",
-	version="0.0.2b2",
+	version="0.0.2",
 	author="James Edington",
 	author_email="james@ishygddt.xyz",
 	description="Library for interacting with the PicoLCD USB LCD screens",
