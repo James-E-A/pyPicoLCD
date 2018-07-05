@@ -191,6 +191,7 @@ if __name__ == "__main__":
 	  *range(38,64,8),
 	  *range(64,128,16),
 	  *range(128,256,32),
+	  255,255>>1
 	]:
 		p.set_backlight(i)
 		p._out_report_cmd_data(
