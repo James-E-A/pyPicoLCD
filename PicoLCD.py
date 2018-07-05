@@ -105,7 +105,7 @@ class PicoLcd:
 		
 		Given an integer i in range(4),
 		
-		Undo the effects of clear() on the (zero-inded) "i"th
+		Undo the effects of clear() on the (zero-indexed) "i"th
 		 quadrant of the screen, revealing the "underlying" image
 		 that was present before the clear(), and re-enabling
 		 that quadrant's image-display functionality.
