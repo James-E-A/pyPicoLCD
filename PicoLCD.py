@@ -68,7 +68,7 @@ class PicoLcd:
 	def set_backlight(self, brightness):
 		"""Set the backlight to "brightness".
 		
-		* min:0
+		* min:0 (backlight fully OFF)
 		* max:255
 		* 1 through 14 are the same as 0
 		* Every brightness level from 15 through about 24 is noticeable
