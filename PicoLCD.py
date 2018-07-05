@@ -7,6 +7,9 @@ from random import randint
 picoLCD_VENDOR=0x04d8
 picoLCD_DEVICE=0xc002
 
+picoLCD_USB_IFACE=0
+picoLCD_USB_ENDPOINT_OFFSET=1
+
 OUT_REPORT_GPO			= 0x81
 
 OUT_REPORT_LCD_BACKLIGHT	= 0x91
@@ -20,6 +23,8 @@ OUT_REPORT_WRITE		= 0x98
 
 SCREEN_W,SCREEN_H		= 256,64
 
+b = lambda o: bytes(o if hasattr(o,'__len__') else (o,))
+
 class PicoLcd:
 	def __init__(self, idProduct=picoLCD_DEVICE, idVendor=picoLCD_VENDOR, DEBUG=False):
 		"""Templated vaguely off drv_pLG_open"""
@@ -27,21 +32,21 @@ class PicoLcd:
 		
 		self.errors=[]
 		try:
-			self._dev.detach_kernel_driver(0)
+			self._dev.detach_kernel_driver(picoLCD_USB_IFACE)
 		except usb.core.USBError as e:
 			self.errors.append(e)
 			if e.errno != 2:
 				raise
 		self._dev.set_configuration()
 		time.sleep(0.0001)
-		usb.util.claim_interface(self._dev,0)
-		self._dev.set_interface_altsetting(0)
+		usb.util.claim_interface(self._dev,picoLCD_USB_IFACE)
+		self._dev.set_interface_altsetting(picoLCD_USB_IFACE)
 		self._DEBUG=DEBUG
 	
 	def __del__(self):
 		"""Templated vaguely off drv_pLG_close"""
-		usb.util.release_interface(self._dev,0)
-#		self._dev.reset()#SEGFAULTS
+		usb.util.release_interface(self._dev,picoLCD_USB_IFACE)
+		self._dev.reset() #Segfaults, but only if the script was exiting anyway
 	
 	def _write(self, data):
 		"""Write the data to the device
@@ -53,9 +58,9 @@ class PicoLcd:
 		"""
 		if self._DEBUG:
 			sys.stderr.buffer.write(data)
-		return self._dev.write(usb.util.ENDPOINT_OUT+1, data)
+		return self._dev.write(usb.util.ENDPOINT_OUT+picoLCD_USB_ENDPOINT_OFFSET, data)
 	
-	def _read(self, n):
+	def _read(self, n=3, timeout=100):
 		"""Read n bytes from the device
 		
 		Templated vaguely off drv_pLG_read
@@ -63,7 +68,13 @@ class PicoLcd:
 		TODO: document WHETHER this is blocking,
 		 and add an option to do the other way
 		"""
-		return self._dev.read(usb.util.ENDPOINT_IN+1, n)
+		return self._dev.read(usb.util.ENDPOINT_IN+picoLCD_USB_ENDPOINT_OFFSET, n, timeout)
+	
+	def _do(self, command, *payloads):
+		return self._write(bytes().join([
+		 b(command),
+		 *payloads
+		]))
 	
 	def set_backlight(self, brightness):
 		"""Set the backlight to "brightness".
@@ -79,20 +90,14 @@ class PicoLcd:
 		"""
 		if brightness<15 and brightness!=0:
 			pass#TODO: warn?
-		return self._write(
-		 bytes([
-		  OUT_REPORT_LCD_BACKLIGHT,
-		  brightness
-		 ])
+		return self._do(OUT_REPORT_LCD_BACKLIGHT,
+		 b(brightness)
 		)
 	
 	def set_contrast(self, contrast):
 		"""Templated vaguely off drv_pLG_contrast"""#TODO: physical errata
-		return self._write(
-		 bytes([
-		  OUT_REPORT_LCD_CONTRAST,
-		  contrast
-		 ])
+		return self._do(OUT_REPORT_LCD_CONTRAST,
+		  b(contrast)
 		)
 	
 	def clear(self):
@@ -102,11 +107,8 @@ class PicoLcd:
 		 [can PRESUMABLY be written during this time, but]
 		 will not be displayed until re-enabled via OUT_REPORT_CMD.
 		"""
-		return self._write(
-		 bytes([
-		  OUT_REPORT_INIT,
-		  0x01,0x00
-		 ])
+		return self._do(OUT_REPORT_INIT,
+		  b'\x01\x00'
 		)
 	
 	def _out_report_cmd(self, i, i_op=(lambda i: i<<2)):
@@ -119,12 +121,9 @@ class PicoLcd:
 		 that was present before the clear(), and re-enabling
 		 that quadrant's image-display functionality.
 		"""
-		return self._write(
-		 bytes([
-		  OUT_REPORT_CMD,
-		  i_op(i),
-		  0x02,0x00,0x64,0x3F,0x00,0x64,0xC0
-		 ])
+		return self._do(OUT_REPORT_CMD,
+		  b(i_op(i)),
+		  b'\x02\x00\x64\x3F\x00\x64\xC0'
 		)
 	
 	def _out_report_cmd_data(self, chipsel, line, data, line_op=(lambda line: line|0b10111000)):
@@ -169,15 +168,13 @@ class PicoLcd:
 		
 		assert len(data)<=32 or self._DEBUG
 		
-		return self._write(
-		 bytes([
-		  OUT_REPORT_CMD_DATA,
-		  chipsel,
-		  0x02,0x00,0x00,
-		  line_op(line), #TODO: fuzz testing or something (priority: range(8) and range(64,64+8))
-		  0x00,0x00,0x40,0x00,0x00,
-		  len(data)
-		 ]) + data
+		return self._do(OUT_REPORT_CMD_DATA,
+		  b(chipsel),
+		  b'\x02\x00\x00',
+		  b(line_op(line)), #TODO: fuzz testing or something (priority: range(8) and range(64,64+8))
+		  b'\x00\x00\x40\x00\x00',
+		  b(len(data)),
+		  data
 		)
 	
 	def _out_report_data(self, chipsel, data, chipsel_op=(lambda chipsel: chipsel|0b1)):
@@ -187,13 +184,11 @@ class PicoLcd:
 		
 		TODO: description
 		"""
-		return self._write(
-		 bytes([
-		  OUT_REPORT_DATA,
-		  chipsel_op(chipsel), #TODO: fuzz testing or something
-		  0x00,0x00,
-		  len(data)
-		 ]) + data
+		return self._do(OUT_REPORT_DATA,
+		  b(chipsel_op(chipsel)), #TODO: fuzz testing or something
+		  b'\x00\x00',
+		  b(len(data)),
+		  data
 		)
 	
 	def _drv_pLG_clear(self):
@@ -221,11 +216,11 @@ class PicoLcd:
 		if col&0b1:
 			raise NotImplementedError
 		if len(data)<=32:
-			return self._out_report_cmd_data(col*4, row, data)
+			return self._out_report_cmd_data((col<<1)&~2, row, data)
 		else:
 			assert len(data)<=64
-			return self._out_report_cmd_data(col*2, row, data[:32]) \
-			     + self._out_report_data(col*2, data[32:])
+			return self._out_report_cmd_data((col<<1)&~2, row, data[:32]) \
+			     + self._out_report_data((col<<1)&~2, data[32:])
 
 if __name__ == "__main__":
 	from datetime import datetime
@@ -241,9 +236,15 @@ if __name__ == "__main__":
 	  255,255>>1
 	]:
 		p.set_backlight(i)
-		p._out_report_cmd_data(
-		  chipsel=int(2.5*4), line=8//2,
-		  data=f68enc(repr(i))
-		)
+		if not randint(0,3):
+			p._out_report_cmd_data(
+			  chipsel=randint(0,31), line=randint(0,8),
+			  data=f68enc(repr(i))
+			)
+		else:
+			p._out_report_data(
+			  chipsel=randint(0,31),
+			  data=f68enc(repr(i))
+			)
 		time.sleep(0.1)
 	p.put_block(0,0,f68enc("TEST 123"))
