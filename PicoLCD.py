@@ -7,19 +7,18 @@ from random import randint
 picoLCD_VENDOR=0x04d8
 picoLCD_DEVICE=0xc002
 
-OUT_REPORT_LED_STATE		= 0x81
+OUT_REPORT_GPO			= 0x81
+
 OUT_REPORT_LCD_BACKLIGHT        = 0x91
 OUT_REPORT_LCD_CONTRAST         = 0x92
-
+OUT_REPORT_INIT			= 0x93
 OUT_REPORT_CMD			= 0x94
 OUT_REPORT_DATA			= 0x95
 OUT_REPORT_CMD_DATA		= 0x96
 
-OUT_REPORT_GPO			= 0x81
 OUT_REPORT_WRITE		= 0x98
 
-SCREEN_H			= 64
-SCREEN_W			= 256
+SCREEN_W,SCREEN_H		= 256,64
 
 class PicoLcd:
 	def __init__(self, idProduct=picoLCD_DEVICE, idVendor=picoLCD_VENDOR, DEBUG=False):
@@ -72,23 +71,29 @@ class PicoLcd:
 		* min:0 (backlight fully OFF)
 		* max:255
 		* 1 through 14 are the same as 0
-		* Every brightness level from 15 through about 24 is noticeable
+		* Every single brightness level from 15
+		  through about 24 is HIGHLY noticeable
+		* 127 is not much different from 255
 		
 		Templated vaguely off drv_pLG_backlight
 		"""
 		if brightness<15 and brightness!=0:
 			pass#TODO: warn?
-		return self._write(bytes([
+		return self._write(
+		 bytes([
 		  OUT_REPORT_LCD_BACKLIGHT,
 		  brightness
-		]))
+		 ])
+		)
 	
 	def set_contrast(self, contrast):
 		"""Templated vaguely off drv_pLG_contrast"""#TODO: physical errata
-		return self._write(bytes([
+		return self._write(
+		 bytes([
 		  OUT_REPORT_LCD_CONTRAST,
 		  contrast
-		]))
+		 ])
+		)
 	
 	def clear(self):
 		"""cmd[3] from drv_pLG_clear, SEEMS TO do the following:
@@ -97,11 +102,14 @@ class PicoLcd:
 		 [can PRESUMABLY be written during this time, but]
 		 will not be displayed until re-enabled via OUT_REPORT_CMD.
 		"""
-		return self._write(bytes([
-		  0x93,0x01,0x00
-		]))
+		return self._write(
+		 bytes([
+		  OUT_REPORT_INIT,
+		  0x01,0x00
+		 ])
+		)
 	
-	def _out_report_cmd(self, i):
+	def _out_report_cmd(self, i, i_op=(lambda i: i<<2)):
 		"""cmd2[9] from drv_pLG_clear, SEEMS TO do the following:
 		
 		Given an integer i in range(4),
@@ -111,43 +119,82 @@ class PicoLcd:
 		 that was present before the clear(), and re-enabling
 		 that quadrant's image-display functionality.
 		"""
-		return self._write(bytes([
+		return self._write(
+		 bytes([
 		  OUT_REPORT_CMD,
-		  i*4,
+		  i_op(i),
 		  0x02,0x00,0x64,0x3F,0x00,0x64,0xC0
-		]))
+		 ])
+		)
 	
-	def _out_report_cmd_data(self, chipsel, line, payload):
+	def _out_report_cmd_data(self, chipsel, line, data, line_op=(lambda line: line|0b10111000)):
 		"""cmd3[64] from drv_pLG_update_img and drv_pLG_clear
 		
-		Cannibalized "magic" code, still testing
+=		Considering the screen as an 8x8 grid of 32px-by-8px "chunks",
+		 write up to one chunk of data to the screen.
 		
-		TODO: description
+		When chipsel is even (i.e., chipsel&0x01 == 0):
+		
+=			Beginning at the left boundary of
+			 the chunk which is
+			 (zero-indexedly speaking,)
+			 the Xth from the left, and
+			 the Yth from the top, where
+			 X=(chipsel&~2)>>1 and
+			 Y=line,
+			
+			Write the data to the screen,
+			 beginning with the first byte,
+			 filling the columns left-to-right,
+			 one byte per 1x8 column,
+			 the low~high bits becoming
+			 the top~bottom pixels
+			 (respectively)
+		
+		When chipsel is odd (i.e., chipsel&0x01 == 1):
+			
+			This functions [exactly?] like
+			 the OUT_REPORT_DATA command,
+			 with one quirk:
+			
+			It seems to forcibly prepend the data with
+			 vaguely the right half of a downward-facing arrow
+			 comprising two bytes.
+			The length of the stem has a [TODO] connection
+			 with the value of line.
+			
+			The value of line does not affect the row; just
+			 the shape of the arrow.
 		"""
-		return self._write(bytes([
+		
+		assert len(data)<=32 or self._DEBUG
+		
+		return self._write(
+		 bytes([
 		  OUT_REPORT_CMD_DATA,
 		  chipsel,
 		  0x02,0x00,0x00,
-		  line|0b10111000, #TODO: fuzz testing or something
+		  line_op(line), #TODO: fuzz testing or something (priority: range(8) and range(64,64+8))
 		  0x00,0x00,0x40,0x00,0x00,
-		  len(payload),
-		  *payload
-		]))
+		  len(data)
+		 ]) + data
+		)
 	
-	def _out_report_data(self, chipsel, payload):
+	def _out_report_data(self, chipsel, data, chipsel_op=(lambda chipsel: chipsel|0b1)):
 		"""cmd4 from drv_pLG_update_img and drv_pLG_clear
 		
 		Cannibalized "magic" code, still testing
 		
 		TODO: description
 		"""
-		return self._write(bytes([
+		return self._write(
+		 bytes([
 		  OUT_REPORT_DATA,
-		  chipsel|0b1, #TODO: fuzz testing or something
+		  chipsel_op(chipsel), #TODO: fuzz testing or something
 		  0x00,0x00,
-		  len(payload),
-		  *payload
-		]))
+		  len(data)
+		 ]) + data
+		)
 	
 	def _drv_pLG_clear(self):
 		"""Legacy "clear" command from drv_picoLCDGraphic.c
@@ -163,22 +210,22 @@ class PicoLcd:
 		self.clear()
 		for i in range(4):
 			self._out_report_cmd(i)
-		payload=bytes(32)#b'\x00'*32
+		data=bytes(32)#b'\x00'*32
 		for cs in range(0,4):
 			for line in range(8):
-				self._out_report_cmd_data(chipsel=cs*4, line=line, payload=payload)
-				self._out_report_data(chipsel=cs*4, payload=payload)
+				self._out_report_cmd_data(chipsel=cs*4, line=line, data=data)
+				self._out_report_data(chipsel=cs*4, data=data)
 	
-	def put_block(self, col, row, payload):
+	def put_block(self, col, row, data):
 		"""ALPHA-QUALITY function to draw pixels to the screen"""
 		if col&0b1:
 			raise NotImplementedError
-		if len(payload)<=32:
-			return self._out_report_cmd_data(col*4, row, payload)
+		if len(data)<=32:
+			return self._out_report_cmd_data(col*4, row, data)
 		else:
-			assert len(payload)<=64
-			return self._out_report_cmd_data(col*2, row, payload[:32]) \
-			     + self._out_report_data(col*2, payload[32:])
+			assert len(data)<=64
+			return self._out_report_cmd_data(col*2, row, data[:32]) \
+			     + self._out_report_data(col*2, data[32:])
 
 if __name__ == "__main__":
 	from datetime import datetime
@@ -196,7 +243,7 @@ if __name__ == "__main__":
 		p.set_backlight(i)
 		p._out_report_cmd_data(
 		  chipsel=int(2.5*4), line=8//2,
-		  payload=f68enc(repr(i))
+		  data=f68enc(repr(i))
 		)
 		time.sleep(0.1)
 	p.put_block(0,0,f68enc("TEST 123"))
