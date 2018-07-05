@@ -84,11 +84,11 @@ class PicoLcd:
 		]))
 	def _cmd4(self, chipsel, payload=[0x00]*32):
 		return self.write(bytes([
-			OUT_REPORT_DATA,
-			chipsel|0x01,#NOTE: no idea what chipsel actually sets
-			0x00,0x00,
-			len(payload),
-			*payload
+		 OUT_REPORT_DATA,
+		 chipsel|0x01,#NOTE: no idea what chipsel actually sets
+		 0x00,0x00,
+		 len(payload),
+		 *payload
 		]))
 	def drv_pLG_clear(self):
 		self.clear()
