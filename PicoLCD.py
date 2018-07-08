@@ -43,11 +43,11 @@ class PicoLcd:
 		self._dev.set_interface_altsetting(picoLCD_USB_IFACE)
 		self._DEBUG=DEBUG
 	
-	def __del__(self):
-		"""Templated vaguely off drv_pLG_close"""
-		usb.util.release_interface(self._dev,picoLCD_USB_IFACE)
-		self._dev.reset() #Segfaults, but only if the script was exiting anyway
-	
+#	def __del__(self):
+#		"""Templated vaguely off drv_pLG_close"""
+#		usb.util.release_interface(self._dev,picoLCD_USB_IFACE)
+#		self._dev.reset() #Segfaults, but only if the script was exiting anyway
+#	
 	def _write(self, data):
 		"""Write the data to the device
 		
