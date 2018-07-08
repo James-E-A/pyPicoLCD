@@ -236,6 +236,8 @@ class PicoLcd:
 		"""ALPHA-QUALITY function to draw pixels to the screen"""
 		if col&0b1:
 			raise NotImplementedError
+		if type(data) is str:
+			data=f68enc(data)
 		if len(data)<=32:
 			return self._cmd3((col<<1)&~0b10, row, data)
 		else:
