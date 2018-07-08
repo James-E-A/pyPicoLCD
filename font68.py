@@ -1,5 +1,8 @@
 from base64 import b85decode as d
 
+#Each 64x8 chunk is 10 and 4/6 characters wide;
+#Each 32x8 chunk is 5 and 2/6 characters wide
+
 f68enc=lambda s, bold=False: b''.join((font68 if not bold else font68_bold)[b] for b in s.encode())
 
 font68 = {
