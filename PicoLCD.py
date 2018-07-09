@@ -1,7 +1,7 @@
 import usb.core,usb.util
 import time
 import sys
-from font68 import f68enc
+#from font68 import f68enc
 from random import randint
 assert sys.version_info>=(3,),"Python2 not supported (yet)"
 
@@ -245,6 +245,28 @@ class PicoLcd:
 			assert len(data)<=64
 			return self._cmd3((col<<1)&~0b10, row, data[:32]) \
 			     + self._cmd4((col<<1)&~0b10, data[32:])
+
+def glyph2pico(glyph, w=6, h=None):
+	"""Takes glyphs of the VGABIOS/PSF format and converts them to the PicoLCD format"""
+	if h is None:
+		h=len(glyph)
+	assert h<=8
+	n=-(-w//8) #ceil(w/8)
+	assert n==1 #TODO
+	
+	c=bytearray(w)
+	dw=n*8-w #delta-WIDTH: The amount of wasted horizontal data (input)
+	dh=8-h  #delta-HEIGHT: The amount of unfilled vertical space (output)
+	msb=(0b1<<(n*8-1)) #msb possible of input bytes
+	
+	for b in range(h):
+		B=glyph[b]
+		for i in range(w):
+			Be = B&(msb >> i) #Mask(extract) the bit @i-from-left
+			Be >>= (n*8-(i+1)) #Normalize it to @lsb
+			Be <<= (dh+b) #Position it to
+			c[i] |= Be #Merge it onto the output
+	return bytes(c) #Fixate output
 
 if __name__ == "__main__":
 	from datetime import datetime
