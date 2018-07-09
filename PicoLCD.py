@@ -3,6 +3,7 @@ import time
 import sys
 from font68 import f68enc
 from random import randint
+assert sys.version_info>=(3,),"Python2 not supported (yet)"
 
 picoLCD_VENDOR=0x04d8
 picoLCD_DEVICE=0xc002
