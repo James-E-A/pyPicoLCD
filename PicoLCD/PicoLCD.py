@@ -1,10 +1,11 @@
 import usb.core,usb.util
 import time
 import sys
-#from font68 import f68enc
+import os.path
+from psf import Psf
 from random import randint
 from PIL import Image
-assert sys.version_info>=(3,),"Python2 not supported (yet)"
+assert sys.version_info>=(3,),"Python2 not supported (yet?)"
 
 picoLCD_VENDOR=0x04d8
 picoLCD_DEVICE=0xc002
@@ -239,7 +240,7 @@ class PicoLcd:
 		if col&0b1:
 			raise NotImplementedError
 		if type(data) is str:
-			data=f68enc(data)
+			data=_f68enc(data)
 		if len(data)<=32:
 			return self._cmd3((col<<1)&~0b10, row, data)
 		else:
@@ -247,20 +248,25 @@ class PicoLcd:
 			return self._cmd3((col<<1)&~0b10, row, data[:32]) \
 			     + self._cmd4((col<<1)&~0b10, data[32:])
 
-def glyph2pico(glyph, w=6, h=None, allow_multibyte_columns=False):
-	"""Takes glyphs of the VGABIOS/PSF format and converts them to the PicoLCD format"""
-	n=-(-w//8) #math.ceil(w/8) == the number of bytes per row of input
-	if h is None:
-		h=len(glyph)//n
-	assert h<=8 or allow_multibyte_columns
-	return Image.frombytes(
-	 '1', (w,h), glyph #'1': 1 bit PER pixel
-	).transpose(
-	 Image.ROTATE_270 #PIL uses CCW 90-degree-rotation for some reason
-	#I *think* this crop is unnecessary
-#	).crop(
-#	 (0,0,8*n,w)
-	).tobytes()
+_Font_6x8=Psf(os.path.join(os.path.dirname(__file__),'Font_6x8.psf'))
+_Font_6x8.glyphs = [
+	Image.frombytes(
+	 '1',_Font_6x8.size,glyph
+	).transpose(Image.ROTATE_270).tobytes()
+	for glyph in _Font_6x8.glyphs
+]
+
+def _f68enc(s, font=_Font_6x8):
+	if type(s) is str:
+		s=s.encode('ibm437')
+	if type(s) is int:
+		s=bytes((s,))
+	#TODO char-glyph mappings whatever whatever
+	# probably pypsf's job
+	return bytes().join(
+		font.glyphs[c]
+		for c in s
+	)
 
 if __name__ == "__main__":
 	from datetime import datetime
@@ -279,12 +285,12 @@ if __name__ == "__main__":
 		if not randint(0,3):
 			p._cmd3(
 			  chipsel=randint(0,31), line=randint(0,8),
-			  data=f68enc(repr(i))
+			  data=_f68enc(repr(i))
 			)
 		else:
 			p._cmd4(
 			  chipsel=randint(0,31),
-			  data=f68enc(repr(i))
+			  data=_f68enc(repr(i))
 			)
 		time.sleep(0.1)
-	p.put_block(0,0,f68enc("TEST 123"))
+	p.put_block(0,0,"TEST 123")
