@@ -40,6 +40,8 @@ class PicoLcd:
 			self.errors.append(e)
 			if e.errno != 2:
 				raise
+		except NotImplementedError:
+			pass
 		self._dev.set_configuration()
 		time.sleep(0.0001)
 		usb.util.claim_interface(self._dev,picoLCD_USB_IFACE)
