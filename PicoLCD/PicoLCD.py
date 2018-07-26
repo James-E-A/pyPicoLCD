@@ -40,7 +40,7 @@ class PicoLcd:
 			self.errors.append(e)
 			if e.errno != 2:
 				raise
-		except NotImplementedError:
+		except (NotImplementedError,AttributeError):
 			pass
 		self._dev.set_configuration()
 		time.sleep(0.0001)

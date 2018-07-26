@@ -4,7 +4,8 @@ pyPicoLCD
 
 A library to interact with the PicoLCD 256x64 from Mini-Box, written in Python
 
-.. note:: If on Windows, you should download `libusb`__ and install it as per `KM4YRI's instructions on GitHub`__
+.. note:: If on Windows, you should download `libusb0`__ (`libusb1`__ does `not yet work`__), put ``libusb0.dll`` into ``%WINDIR%\System32``, put ``libusb0.sys`` into ``%WINDIR%\System32\Drivers``, and then assign libusb to the PicoLCD device via ``install-filter-win.exe``.
 
-.. __: http://libusb.info/
-.. __: https://github.com/pyusb/pyusb/issues/120#issuecomment-322058585
+.. __: https://sourceforge.net/projects/libusb-win32/files/libusb-win32-releases/
+.. __: https://libusb.info/
+.. __: https://github.com/pyusb/pyusb/issues/186#issuecomment-407926048
